@@ -360,11 +360,13 @@ void Scop::computeAllDependences() {
   auto falseDeps =
       computeDependences(allWrites.unite(allReads), allWrites, schedule);
 
-  dependences = flowDeps.unite(falseDeps).coalesce();
+  dependences =
+      isl::UnionMap<Domain, Domain>(flowDeps.unite(falseDeps).coalesce());
 }
 
-isl::union_map Scop::activeDependences(detail::ScheduleTree* tree) {
-  auto prefix = prefixScheduleMupa(scheduleRoot(), tree);
+isl::UnionMap<Domain, Domain> Scop::activeDependences(
+    detail::ScheduleTree* tree) {
+  auto prefix = prefixScheduleMupa<Scope>(scheduleRoot(), tree);
   auto domain = activeDomainPoints(scheduleRoot(), tree);
   auto active = dependences;
   active = active.intersect_domain(domain);

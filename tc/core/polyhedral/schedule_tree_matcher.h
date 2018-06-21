@@ -27,7 +27,9 @@ namespace polyhedral {
 
 // Return the union of the reduction update statements
 // that appear in "domain".
-isl::union_set reductionUpdates(isl::union_set domain, const Scop& scop);
+isl::UnionSet<Domain> reductionUpdates(
+    isl::UnionSet<Domain> domain,
+    const Scop& scop);
 
 // Does the band member with the given partial schedule correspond
 // to a reduction on all statements with a domain in "domain"?

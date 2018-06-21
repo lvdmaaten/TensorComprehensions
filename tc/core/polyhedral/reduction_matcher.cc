@@ -117,13 +117,15 @@ bool isAlmostIdentityReduction(isl::pw_aff pa, const Scop& scop) {
 
 } // namespace
 
-isl::union_set reductionUpdates(isl::union_set domain, const Scop& scop) {
-  auto update = isl::union_set::empty(domain.get_space());
+isl::UnionSet<Domain> reductionUpdates(
+    isl::UnionSet<Domain> domain,
+    const Scop& scop) {
+  auto update = isl::UnionSet<Domain>::empty(domain.get_space());
   domain.foreach_set([&update, &scop](isl::set set) {
     auto setId = set.get_tuple_id();
     std::vector<size_t> reductionDims;
     if (isReductionUpdateId(setId, scop, reductionDims)) {
-      update = update.unite(set);
+      update = update.unite(isl::UnionSet<Domain>(set));
     }
   });
   return update;

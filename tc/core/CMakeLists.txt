@@ -30,7 +30,6 @@ add_library(
   polyhedral/schedule_tree_elem.cc
   polyhedral/schedule_print.cc
   polyhedral/scop.cc
-  polyhedral/separation.cc
   polyhedral/unroll.cc
 )
 target_include_directories(tc_core PUBLIC ${LLVM_INCLUDE_DIRS})

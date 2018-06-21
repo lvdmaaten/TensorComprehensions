@@ -262,6 +262,173 @@ struct UnionAsVector
   }
 };
 
+template <typename First, typename Second>
+struct Pair;
+
+template <typename Domain, typename Range>
+struct MultiAff;
+
+template <typename Domain, typename Range>
+struct MultiUnionPwAff;
+
+template <typename Domain, typename Range>
+struct UnionMap;
+
+template <typename Domain>
+struct UnionSet : public union_set {
+  explicit UnionSet(const union_set& uset) : union_set(uset) {}
+  template <typename Range>
+  inline UnionSet<Range> apply(const UnionMap<Domain, Range>& umap) const {
+    auto res = this->union_set::apply(umap);
+    return UnionSet<Range>(res);
+  }
+  static inline UnionSet<Domain> empty(isl::space space) {
+    auto res = union_set::empty(space);
+    return UnionSet<Domain>(res);
+  }
+  inline UnionSet<Domain> gist(const UnionSet<Domain>& uset) const {
+    auto res = this->union_set::gist(uset);
+    return UnionSet<Domain>(res);
+  }
+  inline UnionSet<Domain> intersect(const UnionSet<Domain>& uset) const {
+    auto res = this->union_set::intersect(uset);
+    return UnionSet<Domain>(res);
+  }
+  inline UnionSet<Domain> subtract(const UnionSet<Domain>& uset) const {
+    auto res = this->union_set::subtract(uset);
+    return UnionSet<Domain>(res);
+  }
+  inline UnionSet<Domain> unite(const UnionSet<Domain>& uset) const {
+    auto res = this->union_set::unite(uset);
+    return UnionSet<Domain>(res);
+  }
+  inline UnionSet<Domain> universe() const {
+    auto res = this->union_set::universe();
+    return UnionSet<Domain>(res);
+  }
+  template <
+      typename MapDomain,
+      typename MapRange,
+      typename = std::enable_if<
+          std::is_same<Domain, isl::Pair<MapDomain, MapRange>>::value>>
+  inline UnionMap<MapDomain, MapRange> unwrap() const {
+    auto res = this->union_set::unwrap();
+    return UnionMap<MapDomain, MapRange>(res);
+  }
+};
+
+template <typename Domain, typename Range>
+struct UnionMap : public union_map {
+  UnionMap() = default;
+  explicit UnionMap(const union_map& umap) : union_map(umap) {}
+  static inline UnionMap<Domain, Range> from(
+      const MultiUnionPwAff<Domain, Range>& mupa) {
+    return UnionMap<Domain, Range>(union_map::from(mupa));
+  }
+  template <typename Range2>
+  inline UnionMap<Range2, Range> apply_domain(
+      const UnionMap<Domain, Range2>& umap2) const {
+    auto res = this->union_map::apply_domain(umap2);
+    return UnionMap<Range2, Range>(res);
+  }
+  template <typename Range2>
+  inline UnionMap<Domain, Range2> apply_range(
+      const UnionMap<Range, Range2>& umap2) const {
+    auto res = this->union_map::apply_range(umap2);
+    return UnionMap<Domain, Range2>(res);
+  }
+  inline UnionSet<Domain> domain() const {
+    auto res = this->union_map::domain();
+    return UnionSet<Domain>(res);
+  }
+  template <
+      typename Range2,
+      typename = std::enable_if<std::is_same<Domain, Range>::value>>
+  inline UnionMap<Domain, Domain> eq_at(
+      const MultiUnionPwAff<Domain, Range2>& mupa) const {
+    auto res = this->union_map::eq_at(mupa);
+    return UnionMap<Domain, Domain>(res);
+  }
+  inline UnionMap<Domain, Range> intersect_params(const set& set) const {
+    auto res = this->union_map::intersect_params(set);
+    return UnionMap<Domain, Range>(res);
+  }
+  inline UnionMap<Domain, Range> intersect_domain(
+      const UnionSet<Domain>& uset) const {
+    auto res = this->union_map::intersect_domain(uset);
+    return UnionMap<Domain, Range>(res);
+  }
+  inline UnionMap<Domain, Range> intersect_range(
+      const UnionSet<Range>& uset) const {
+    auto res = this->union_map::intersect_range(uset);
+    return UnionMap<Domain, Range>(res);
+  }
+  inline UnionSet<Range> range() const {
+    auto res = this->union_map::range();
+    return UnionSet<Range>(res);
+  }
+  inline UnionMap<Range, Domain> reverse() const {
+    auto res = this->union_map::reverse();
+    return UnionMap<Range, Domain>(res);
+  }
+  inline UnionMap<Domain, Range> subtract(
+      const UnionMap<Domain, Range>& umap2) const {
+    auto res = this->union_map::subtract(umap2);
+    return UnionMap<Domain, Range>(res);
+  }
+  inline UnionMap<Domain, Range> unite(
+      const UnionMap<Domain, Range>& umap2) const {
+    auto res = this->union_map::unite(umap2);
+    return UnionMap<Domain, Range>(res);
+  }
+  inline UnionSet<Pair<Domain, Range>> wrap() const {
+    auto res = this->union_map::wrap();
+    return UnionSet<Pair<Domain, Range>>(res);
+  }
+};
+
+template <typename Domain, typename Range>
+struct MultiAff : public multi_aff {
+  explicit MultiAff(const multi_aff& ma) : multi_aff(ma) {}
+};
+
+template <typename Domain, typename Range>
+struct MultiUnionPwAff : public multi_union_pw_aff {
+  explicit MultiUnionPwAff(const multi_union_pw_aff& mupa)
+      : multi_union_pw_aff(mupa) {}
+  MultiUnionPwAff(isl::space space, isl::union_pw_aff_list list)
+      : multi_union_pw_aff(space, list) {}
+  template <typename Range2>
+  inline MultiUnionPwAff<Domain, Range2> apply(
+      MultiAff<Range, Range2> ma) const {
+    auto res = this->multi_union_pw_aff::apply(ma);
+    return MultiUnionPwAff<Domain, Range2>(res);
+  }
+  inline UnionSet<Domain> domain() const {
+    auto res = this->multi_union_pw_aff::domain();
+    return UnionSet<Domain>(res);
+  }
+  inline MultiUnionPwAff<Domain, Range> intersect_domain(
+      const UnionSet<Domain>& uset) {
+    auto res = this->multi_union_pw_aff::intersect_domain(uset);
+    return MultiUnionPwAff<Domain, Range>(res);
+  }
+  template <typename Range2>
+  inline MultiUnionPwAff<Domain, Pair<Range, Range2>> range_product(
+      MultiUnionPwAff<Domain, Range2> mupa2) const {
+    auto res = this->multi_union_pw_aff::range_product(mupa2);
+    return MultiUnionPwAff<Domain, Pair<Range, Range2>>(res);
+  }
+  inline MultiUnionPwAff<Domain, Range> union_add(
+      MultiUnionPwAff<Domain, Range> mupa2) const {
+    auto res = this->multi_union_pw_aff::union_add(mupa2);
+    return MultiUnionPwAff<Domain, Range>(res);
+  }
+  inline UnionMap<Domain, Range> asUnionMap() {
+    return UnionMap<Domain, Range>::from(*this);
+  }
+};
+
 struct IslIdIslHash {
   size_t operator()(const isl::id& id) const {
     return isl_id_get_hash(id.get());

@@ -547,14 +547,18 @@ ScheduleTree* insertCopiesUnder(
 
   if (reads) {
     insertExtensionBefore(
-        root, tree, tree->child({0}), readExtension, std::move(readFilterNode));
+        root,
+        tree,
+        tree->child({0}),
+        isl::UnionMap<Prefix, Domain>(readExtension),
+        std::move(readFilterNode));
   }
   if (writes) {
     insertExtensionAfter(
         root,
         tree,
         tree->child({0}),
-        writeExtension,
+        isl::UnionMap<Prefix, Domain>(writeExtension),
         std::move(writeFilterNode));
   }
 

@@ -81,7 +81,7 @@ isl::schedule_node insertBranch(
  */
 std::vector<size_t> findCorePositions(
     const ScheduleTree* st,
-    isl::union_set domain) {
+    isl::UnionSet<Domain> domain) {
   std::vector<size_t> positions;
   TC_CHECK(st->elemAs<ScheduleTreeElemSequence>());
   for (size_t i = 0; i < st->numChildren(); ++i) {
@@ -125,7 +125,7 @@ isl::schedule_node insertExtension(
     isl::schedule_node node,
     const ScheduleTree* st) {
   auto depth0 = node.get_tree_depth();
-  auto domain = node.get_universe_domain();
+  auto domain = isl::UnionSet<Domain>(node.get_universe_domain());
   auto child = st->child({0});
   auto corePos = findCorePositions(child, domain);
   TC_CHECK(!corePos.empty());

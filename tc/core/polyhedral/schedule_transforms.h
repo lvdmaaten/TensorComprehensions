@@ -21,6 +21,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "tc/core/polyhedral/domain_types.h"
 #include "tc/core/polyhedral/functional.h"
 #include "tc/core/polyhedral/mapping_types.h"
 #include "tc/core/polyhedral/options.h"
@@ -181,7 +182,7 @@ void insertExtensionBefore(
     const detail::ScheduleTree* root,
     detail::ScheduleTree* relativeRoot,
     detail::ScheduleTree* tree,
-    isl::union_map extension,
+    isl::UnionMap<Prefix, Domain> extension,
     ScheduleTreeUPtr&& filterNode);
 
 // Insert an extension with the given extension map and extension filter node
@@ -196,7 +197,7 @@ void insertExtensionAfter(
     const detail::ScheduleTree* root,
     detail::ScheduleTree* relativeRoot,
     detail::ScheduleTree* tree,
-    isl::union_map extension,
+    isl::UnionMap<Prefix, Domain> extension,
     ScheduleTreeUPtr&& filterNode);
 
 // Given a sequence node in the schedule tree, insert
@@ -240,7 +241,7 @@ void insertExtensionLabelAfter(
 bool canOrderBefore(
     detail::ScheduleTree* root,
     detail::ScheduleTree* tree,
-    isl::union_set filter,
+    isl::UnionSet<Domain> filter,
     isl::union_map dependences);
 // Is it possible to order the elements in the given filter
 // after the other active elements without violating
@@ -248,7 +249,7 @@ bool canOrderBefore(
 bool canOrderAfter(
     detail::ScheduleTree* root,
     detail::ScheduleTree* tree,
-    isl::union_set filter,
+    isl::UnionSet<Domain> filter,
     isl::union_map dependences);
 
 // Insert a sequence to ensure that the active domain elements
@@ -256,13 +257,13 @@ bool canOrderAfter(
 void orderBefore(
     detail::ScheduleTree* root,
     detail::ScheduleTree* tree,
-    isl::union_set filter);
+    isl::UnionSet<Domain> filter);
 // Insert a sequence to ensure that the active domain elements
 // in the given filter are executed after the other active domain elements.
 void orderAfter(
     detail::ScheduleTree* root,
     detail::ScheduleTree* tree,
-    isl::union_set filter);
+    isl::UnionSet<Domain> filter);
 
 // Given a schedule defined by the ancestors of the given node,
 // extend it to a schedule that also covers the node itself.
@@ -272,14 +273,32 @@ isl::union_map extendSchedule(
 
 // Get the partial schedule defined by ancestors of the given node and the node
 // itself.
+namespace detail {
 isl::union_map partialSchedule(
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* node);
+}
+template <typename Schedule>
+isl::UnionMap<Domain, Schedule> partialSchedule(
+    const detail::ScheduleTree* root,
+    const detail::ScheduleTree* tree) {
+  auto partial = detail::partialSchedule(root, tree);
+  return isl::UnionMap<Domain, Schedule>(partial);
+}
 
 // Return the schedule defined by the ancestors of the given node.
+namespace detail {
 isl::union_map prefixSchedule(
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* node);
+}
+template <typename Schedule>
+isl::UnionMap<Domain, Schedule> prefixSchedule(
+    const detail::ScheduleTree* root,
+    const detail::ScheduleTree* tree) {
+  auto prefix = detail::prefixSchedule(root, tree);
+  return isl::UnionMap<Domain, Schedule>(prefix);
+}
 
 // Return the concatenation of all band node partial schedules
 // from "relativeRoot" (inclusive) to "tree" (exclusive)
@@ -298,23 +317,41 @@ isl::multi_union_pw_aff infixScheduleMupa(
 // function on the universe domain of the schedule tree.
 // Note that unlike isl_schedule_node_get_prefix_schedule_multi_union_pw_aff,
 // this function does not take into account any intermediate filter nodes.
+namespace detail {
 isl::multi_union_pw_aff prefixScheduleMupa(
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* tree);
+}
+template <typename Schedule>
+isl::MultiUnionPwAff<Domain, Schedule> prefixScheduleMupa(
+    const detail::ScheduleTree* root,
+    const detail::ScheduleTree* tree) {
+  auto prefix = detail::prefixScheduleMupa(root, tree);
+  return isl::MultiUnionPwAff<Domain, Schedule>(prefix);
+}
 
 // Return the concatenation of all outer band node partial schedules,
 // including that of the node itself.
 // Note that this function does not take into account
 // any intermediate filter nodes.
+namespace detail {
 isl::multi_union_pw_aff partialScheduleMupa(
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* tree);
+}
+template <typename Schedule>
+isl::MultiUnionPwAff<Domain, Schedule> partialScheduleMupa(
+    const detail::ScheduleTree* root,
+    const detail::ScheduleTree* tree) {
+  auto partial = detail::partialScheduleMupa(root, tree);
+  return isl::MultiUnionPwAff<Domain, Schedule>(partial);
+}
 
 // Get the set of domain points active at the given node.  A domain
 // point is active if it was not filtered away on the path from the
 // root to the node.  The root must be a domain element, otherwise no
 // elements would be considered active.
-isl::union_set activeDomainPoints(
+isl::UnionSet<Domain> activeDomainPoints(
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* node);
 
@@ -322,7 +359,7 @@ isl::union_set activeDomainPoints(
 // point is active if it was not filtered away on the path from the
 // root to the node.  The root must be a domain element, otherwise no
 // elements would be considered active.
-isl::union_set activeDomainPointsBelow(
+isl::UnionSet<Domain> activeDomainPointsBelow(
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* node);
 
@@ -336,7 +373,8 @@ isl::union_set prefixMappingFilter(
 // rooted at "root") to identifiers "ids", where all branches in "tree" are
 // assumed to have been mapped to these identifiers.  The result lives in a
 // space of the form "tupleId"["ids"...].
-isl::multi_union_pw_aff extractDomainToIds(
+template <typename MappingType>
+isl::MultiUnionPwAff<Domain, MappingType> extractDomainToIds(
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* tree,
     const std::vector<mapping::MappingId>& ids,

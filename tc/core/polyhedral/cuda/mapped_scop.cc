@@ -199,7 +199,7 @@ void fixThreadsBelow(
 bool separatedOut(
     Scop& scop,
     detail::ScheduleTree* tree,
-    isl::union_set updates) {
+    isl::UnionSet<Domain> updates) {
   auto domain = activeDomainPoints(scop.scheduleRoot(), tree);
   auto other = domain.subtract(updates);
   if (other.is_empty()) {
@@ -253,7 +253,7 @@ bool MappedScop::detectReductions(detail::ScheduleTree* tree) {
   // a single reduction for now.
   // Support for multiple reductions would require a check
   // that these reductions do not interfere with each other.
-  auto domain = band->mupa_.domain();
+  auto domain = isl::UnionSet<Domain>(band->mupa_.domain());
   auto updates = reductionUpdates(domain, scop());
   if (updates.n_set() != 1) {
     return false;
@@ -287,8 +287,8 @@ bool MappedScop::needReductionSeparation(const detail::ScheduleTree* st) {
   return !reductionBandUpdates_.at(st).separated;
 }
 
-isl::multi_union_pw_aff MappedScop::reductionMapSchedule(
-    const detail::ScheduleTree* st) {
+isl::MultiUnionPwAff<Domain, ReductionSchedule>
+MappedScop::reductionMapSchedule(const detail::ScheduleTree* st) {
   TC_CHECK(reductionBandUpdates_.count(st) == 1);
   auto reductionBand = st->elemAs<detail::ScheduleTreeElemBand>();
   TC_CHECK(reductionBand);
@@ -305,7 +305,7 @@ isl::multi_union_pw_aff MappedScop::reductionMapSchedule(
   reductionSchedule = reductionSchedule.drop_dims(
       isl::dim_type::set, 0, reductionDim - nMappedThreads + 1);
 
-  return reductionSchedule;
+  return isl::MultiUnionPwAff<Domain, ReductionSchedule>(reductionSchedule);
 }
 
 detail::ScheduleTree* MappedScop::separateReduction(detail::ScheduleTree* st) {
@@ -316,7 +316,7 @@ detail::ScheduleTree* MappedScop::separateReduction(detail::ScheduleTree* st) {
 
   auto root = scop_->scheduleRoot();
   auto domain = activeDomainPoints(root, st);
-  auto prefixSchedule = prefixScheduleMupa(root, st);
+  auto prefixSchedule = prefixScheduleMupa<Prefix>(root, st);
   auto reductionSchedule = reductionMapSchedule(st);
   auto space = reductionSchedule.get_space();
   auto size = isl::multi_val::zero(space);
@@ -479,7 +479,7 @@ constexpr auto kWarp = "warp";
  * (of size "warpSize") to a warp identifier,
  * based on the thread sizes s_x, s_y up to s_z in "block".
  */
-isl::multi_aff constructThreadToWarp(
+isl::MultiAff<Thread, Warp> constructThreadToWarp(
     isl::ctx ctx,
     const unsigned warpSize,
     const Block& block) {
@@ -498,35 +498,36 @@ isl::multi_aff constructThreadToWarp(
 
   aff = aff.scale_down(isl::val(ctx, warpSize)).floor();
   auto mapSpace = blockSpace.product(warpSpace).unwrap();
-  return isl::multi_aff(mapSpace, isl::aff_list(aff));
+  return isl::MultiAff<Thread, Warp>(
+      isl::multi_aff(mapSpace, isl::aff_list(aff)));
 }
 } // namespace
 
-isl::multi_union_pw_aff MappedScop::threadMappingSchedule(
+isl::MultiUnionPwAff<Domain, Thread> MappedScop::threadMappingSchedule(
     const detail::ScheduleTree* tree) const {
   std::vector<mapping::MappingId> ids;
   for (size_t i = 0; i < numThreads.view.size(); ++i) {
     ids.emplace_back(mapping::ThreadId::makeId(i));
   }
   auto tupleId = isl::id(tree->ctx_, kBlock);
-  return extractDomainToIds(scop_->scheduleRoot(), tree, ids, tupleId);
+  return extractDomainToIds<Thread>(scop_->scheduleRoot(), tree, ids, tupleId);
 }
 
-isl::multi_union_pw_aff MappedScop::blockMappingSchedule(
+isl::MultiUnionPwAff<Domain, Block> MappedScop::blockMappingSchedule(
     const detail::ScheduleTree* tree) const {
   std::vector<mapping::MappingId> ids;
   for (size_t i = 0; i < numBlocks.view.size(); ++i) {
     ids.emplace_back(mapping::BlockId::makeId(i));
   }
   auto tupleId = isl::id(tree->ctx_, kGrid);
-  return extractDomainToIds(scop_->scheduleRoot(), tree, ids, tupleId);
+  return extractDomainToIds<Block>(scop_->scheduleRoot(), tree, ids, tupleId);
 }
 
 Scop::SyncLevel MappedScop::findBestSync(
     detail::ScheduleTree* st1,
     detail::ScheduleTree* st2,
-    isl::multi_union_pw_aff domainToThread,
-    isl::multi_union_pw_aff domainToWarp) {
+    isl::MultiUnionPwAff<Domain, Thread> domainToThread,
+    isl::MultiUnionPwAff<Domain, Warp> domainToWarp) {
   // Active points in the two schedule trees
   auto stRoot = scop_->scheduleRoot();
   auto activePoints1 = activeDomainPointsBelow(stRoot, st1);

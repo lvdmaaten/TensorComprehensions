@@ -23,6 +23,7 @@
 #include "tc/external/isl.h"
 
 #include "tc/core/check.h"
+#include "tc/core/polyhedral/domain_types.h"
 #include "tc/core/polyhedral/mapping_types.h"
 
 namespace tc {
@@ -77,7 +78,7 @@ struct ScheduleTreeElemContext : public ScheduleTreeElemBase {
 struct ScheduleTreeElemDomain : public ScheduleTreeElemBase {
   static constexpr detail::ScheduleTreeType NodeType =
       detail::ScheduleTreeType::Domain;
-  isl::union_set domain_;
+  isl::UnionSet<Domain> domain_;
   ScheduleTreeElemDomain() = delete;
   ScheduleTreeElemDomain(const ScheduleTreeElemDomain& eb)
       : domain_(eb.domain_) {}
@@ -96,7 +97,7 @@ struct ScheduleTreeElemDomain : public ScheduleTreeElemBase {
 struct ScheduleTreeElemExtension : public ScheduleTreeElemBase {
   static constexpr detail::ScheduleTreeType NodeType =
       detail::ScheduleTreeType::Extension;
-  isl::union_map extension_;
+  isl::UnionMap<Prefix, Domain> extension_;
   ScheduleTreeElemExtension() = delete;
   ScheduleTreeElemExtension(const ScheduleTreeElemExtension& eb)
       : extension_(eb.extension_) {}
@@ -115,7 +116,7 @@ struct ScheduleTreeElemExtension : public ScheduleTreeElemBase {
 struct ScheduleTreeElemFilter : public ScheduleTreeElemBase {
   static constexpr detail::ScheduleTreeType NodeType =
       detail::ScheduleTreeType::Filter;
-  isl::union_set filter_;
+  isl::UnionSet<Domain> filter_;
   ScheduleTreeElemFilter() = delete;
   ScheduleTreeElemFilter(const ScheduleTreeElemFilter& eb)
       : filter_(eb.filter_) {}
@@ -145,7 +146,7 @@ struct ScheduleTreeElemMapping : public ScheduleTreeElemBase {
       : mapping(mapping), filter_(isl::union_set()) {
     TC_CHECK_GT(mapping.size(), 0u) << "empty mapping filter";
 
-    auto domain = mapping.cbegin()->second.domain();
+    auto domain = isl::UnionSet<Domain>(mapping.cbegin()->second.domain());
     for (auto& kvp : mapping) {
       TC_CHECK(domain.is_equal(kvp.second.domain()));
     }
@@ -156,7 +157,7 @@ struct ScheduleTreeElemMapping : public ScheduleTreeElemBase {
       // Create mapping filter by equating the
       // parameter mappedIds[i] to the "i"-th affine function.
       upa = upa.sub(isl::union_pw_aff::param_on_domain(domain.universe(), id));
-      filter_ = filter_.intersect(upa.zero_union_set());
+      filter_ = filter_.intersect(isl::UnionSet<Domain>(upa.zero_union_set()));
     }
   }
   virtual ~ScheduleTreeElemMapping() override {}
@@ -172,7 +173,7 @@ struct ScheduleTreeElemMapping : public ScheduleTreeElemBase {
   // Mapping from identifiers to affine functions on domain elements.
   const Mapping mapping;
   // Assignment of the affine functions to the identifiers as parameters.
-  isl::union_set filter_;
+  isl::UnionSet<Domain> filter_;
 };
 
 struct ScheduleTreeElemSequence : public ScheduleTreeElemBase {

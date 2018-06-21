@@ -131,6 +131,8 @@ std::vector<T> collectBranchMarkers(T root, T node) {
   return findThreadSpecificMarkers(node);
 }
 
+struct FullSchedule;
+
 /*
  * Transform schedule bands into a union_map.
  * Takes all partial schedules at leaves as MUPAs (without accounting for
@@ -139,7 +141,8 @@ std::vector<T> collectBranchMarkers(T root, T node) {
  * current leaves and transforms them into union maps.
  * Mapping filters are ignored.
  */
-isl::union_map fullSchedule(const detail::ScheduleTree* root) {
+isl::UnionMap<Domain, FullSchedule> fullSchedule(
+    const detail::ScheduleTree* root) {
   using namespace tc::polyhedral::detail;
 
   if (!root->elemAs<ScheduleTreeElemDomain>()) {
@@ -182,7 +185,7 @@ isl::union_map fullSchedule(const detail::ScheduleTree* root) {
       throw promotion::PromotionLogicError(ss.str());
     }
   }
-  return schedule;
+  return isl::UnionMap<Domain, FullSchedule>(schedule);
 }
 
 /*
@@ -263,7 +266,7 @@ bool promotionImprovesCoalescing(
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* node,
     const TensorReferenceGroup& group,
-    isl::union_map schedule) {
+    isl::UnionMap<Domain, FullSchedule> schedule) {
   auto originalAccesses = group.originalAccesses();
 
   auto markers = collectBranchMarkers(root, node);
@@ -313,6 +316,8 @@ isl::union_set collectMappingsTo(const Scop& scop) {
   return mapping;
 }
 
+struct Unrolled;
+
 /*
  * Check that only unrolled loops may appear in access subscripts.
  * Because the scoping point can be above a branching tree, descend into each
@@ -343,11 +348,12 @@ isl::union_set collectMappingsTo(const Scop& scop) {
  * different references may have different values, but all of them remain
  * independent of non-unrolled loop iterators.
  */
+template <typename Outer>
 bool accessSubscriptsAreUnrolledLoops(
     const TensorReferenceGroup& group,
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* scope,
-    isl::multi_union_pw_aff outerSchedule) {
+    isl::MultiUnionPwAff<Domain, Outer> outerSchedule) {
   using namespace detail;
 
   auto nodes = ScheduleTree::collect(scope);
@@ -366,7 +372,7 @@ bool accessSubscriptsAreUnrolledLoops(
 
     auto unrolledDims = isl::union_pw_aff_list(leaf->ctx_, 1);
     for (auto node : ancestors) {
-      auto band = node->elemAs<detail::ScheduleTreeElemBand>();
+      auto band = node->template elemAs<detail::ScheduleTreeElemBand>();
       if (!band) {
         continue;
       }
@@ -383,7 +389,8 @@ bool accessSubscriptsAreUnrolledLoops(
 
     auto space = isl::space(leaf->ctx_, 0, unrolledDims.n())
                      .align_params(subdomain.get_space());
-    auto unrolledDimsMupa = isl::multi_union_pw_aff(space, unrolledDims);
+    auto unrolledDimsMupa =
+        isl::MultiUnionPwAff<Domain, Unrolled>(space, unrolledDims);
 
     // It is possible that no loops are unrolled, in which case
     // unrolledDimsMupa is zero-dimensional and needs an explicit domain
@@ -392,10 +399,11 @@ bool accessSubscriptsAreUnrolledLoops(
         unrolledDimsMupa.intersect_domain(group.originalAccesses().domain());
 
     auto accesses = group.originalAccesses();
-    auto schedule = outerSchedule.flat_range_product(unrolledDimsMupa);
-    accesses = accesses.apply_domain(isl::union_map::from(schedule));
+    auto schedule = outerSchedule.range_product(unrolledDimsMupa);
+    auto scheduleMap = schedule.asUnionMap();
+    auto scheduledAccesses = accesses.apply_domain(scheduleMap);
 
-    if (!accesses.is_single_valued()) {
+    if (!scheduledAccesses.is_single_valued()) {
       return false;
     }
   }
@@ -415,23 +423,25 @@ bool accessSubscriptsAreUnrolledLoops(
  * thread associated to a given pair of tensor element and outer schedule
  * iteration.
  */
+template <typename Outer>
 bool isPromotableToRegistersBelow(
     const TensorReferenceGroup& group,
     const detail::ScheduleTree* root,
     const detail::ScheduleTree* scope,
-    isl::multi_union_pw_aff outer,
-    isl::multi_union_pw_aff thread) {
+    isl::MultiUnionPwAff<Domain, Outer> outer,
+    isl::MultiUnionPwAff<Domain, Thread> thread) {
   if (!accessSubscriptsAreUnrolledLoops(
-          group, root, scope, outer.flat_range_product(thread))) {
+          group, root, scope, outer.range_product(thread))) {
     return false;
   }
 
   auto originalAccesses = group.originalAccesses();
-  auto map = isl::union_map::from(outer);
-  map = map.range_product(originalAccesses);
-  map = map.apply_domain(isl::union_map::from(thread));
+  auto outerMap = isl::UnionMap<Domain, Outer>::from(outer);
+  auto pair = outerMap.range_product(originalAccesses);
+  auto threadMap = isl::UnionMap<Domain, Thread>::from(thread);
+  auto threadToPair = pair.apply_domain(threadMap);
 
-  return map.is_injective();
+  return threadToPair.is_injective();
 }
 
 /*
@@ -654,7 +664,7 @@ void promoteToRegistersBelow(MappedScop& mscop, detail::ScheduleTree* scope) {
   auto blockSchedule = mscop.blockMappingSchedule(mscop.schedule());
 
   // Pure affine schedule without (mapping) filters.
-  auto partialSchedMupa = partialScheduleMupa(root, scope);
+  auto partialSchedMupa = partialScheduleMupa<Scope>(root, scope);
   // Schedule with block mapping filter.
   auto partialSched =
       isl::union_map::from(partialSchedMupa).intersect_domain(blockMapping);
@@ -662,7 +672,7 @@ void promoteToRegistersBelow(MappedScop& mscop, detail::ScheduleTree* scope) {
   // performed with respect to the block mapping, so append the block schedule.
   // If the partial schedule contains it already, it will just end up with
   // identical dimensions without affecting the result of the checks.
-  partialSchedMupa = partialSchedMupa.flat_range_product(blockSchedule);
+  auto partialSchedBlockMupa = partialSchedMupa.range_product(blockSchedule);
 
   for (auto& tensorGroups : groupMap) {
     auto tensorId = tensorGroups.first;
@@ -676,11 +686,11 @@ void promoteToRegistersBelow(MappedScop& mscop, detail::ScheduleTree* scope) {
         continue;
       }
       if (!isPromotableToRegistersBelow(
-              *group, root, scope, partialSchedMupa, threadSchedule)) {
+              *group, root, scope, partialSchedBlockMupa, threadSchedule)) {
         continue;
       }
       // Check reuse within threads.
-      auto schedule = partialSchedMupa.flat_range_product(threadSchedule);
+      auto schedule = partialSchedBlockMupa.flat_range_product(threadSchedule);
       if (!hasReuseWithin(*group, schedule)) {
         continue;
       }
