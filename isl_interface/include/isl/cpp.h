@@ -1913,8 +1913,8 @@ public:
   inline isl::multi_aff range_product(isl::multi_aff multi2) const;
   inline isl::multi_aff range_splice(unsigned int pos, isl::multi_aff multi2) const;
   inline isl::multi_aff reset_user() const;
-  inline isl::multi_aff scale(isl::multi_val mv) const;
   inline isl::multi_aff scale(isl::val v) const;
+  inline isl::multi_aff scale(isl::multi_val mv) const;
   inline isl::multi_aff scale_down(isl::val v) const;
   inline isl::multi_aff scale_down(isl::multi_val mv) const;
   inline isl::multi_aff set_aff(int pos, isl::aff el) const;
@@ -11032,18 +11032,6 @@ isl::multi_aff multi_aff::reset_user() const
   return manage(res);
 }
 
-isl::multi_aff multi_aff::scale(isl::multi_val mv) const
-{
-  if (!ptr || mv.is_null())
-    throw isl::exception::create(isl_error_invalid,
-        "NULL input", __FILE__, __LINE__);
-  options_scoped_set_on_error saved_on_error(get_ctx(), ISL_ON_ERROR_CONTINUE);
-  auto res = isl_multi_aff_scale_multi_val(copy(), mv.release());
-  if (!res)
-    throw exception::create_from_last_error(get_ctx());
-  return manage(res);
-}
-
 isl::multi_aff multi_aff::scale(isl::val v) const
 {
   if (!ptr || v.is_null())
@@ -11051,6 +11039,18 @@ isl::multi_aff multi_aff::scale(isl::val v) const
         "NULL input", __FILE__, __LINE__);
   options_scoped_set_on_error saved_on_error(get_ctx(), ISL_ON_ERROR_CONTINUE);
   auto res = isl_multi_aff_scale_val(copy(), v.release());
+  if (!res)
+    throw exception::create_from_last_error(get_ctx());
+  return manage(res);
+}
+
+isl::multi_aff multi_aff::scale(isl::multi_val mv) const
+{
+  if (!ptr || mv.is_null())
+    throw isl::exception::create(isl_error_invalid,
+        "NULL input", __FILE__, __LINE__);
+  options_scoped_set_on_error saved_on_error(get_ctx(), ISL_ON_ERROR_CONTINUE);
+  auto res = isl_multi_aff_scale_multi_val(copy(), mv.release());
   if (!res)
     throw exception::create_from_last_error(get_ctx());
   return manage(res);
